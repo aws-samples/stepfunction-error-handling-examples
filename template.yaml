@@ -1,0 +1,172 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Error Handling in Lambda Function
+Parameters:
+  CleanInputFunctionName:
+    Description: The name of the Clean Input Lambda Function
+    Type: String
+    Default: CleanInput
+  MultiplyFunctionName:
+    Description: The name of the Multiply Lambda Function
+    Type: String
+    Default: Multiply
+  AddFunctionName:
+    Description: The name of the Add Lambda Function
+    Type: String
+    Default: Add
+  SubtractFunctionName:
+    Description: The name of the Subtract Lambda Function
+    Type: String
+    Default: Subtract
+  DivideFunctionName:
+    Description: The name of the Divide Lambda Function
+    Type: String
+    Default: Divide
+  NotificationEmail:
+    Description: Notification Email
+    Type: String
+    Default: 'test@gmail.com'
+
+Resources:
+  LambdaStateMachine:
+    Type: AWS::Serverless::StateMachine # More info about State Machine Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-statemachine.html
+    Properties:
+      DefinitionUri: statemachine/Lambda_State_Machine_EL.asl.json
+      Role: !GetAtt StateMachineRole.Arn
+      DefinitionSubstitutions:
+        AddFunctionArn: !Ref AddFunction
+        CleanFunctionArn: !Ref CleanInputFunction
+        DivideFunctionArn: !Ref DivideFunction
+        MultiplyFunctionArn: !Ref MultiplyFunction
+        SubtractFunctionArn: !Ref SubtractFunction
+        TopicArn: !Ref SNSNotificationTopic
+
+  StateMachineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub statemachine-role-${AWS::StackName}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+  InvokeFunctionPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub statemachine-invoke-function-policy-${AWS::StackName}
+      Roles:
+        - !Ref StateMachineRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - lambda:InvokeFunction
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - SNS:Publish
+            Resource: !Ref SNSNotificationTopic
+  SNSNotificationTopic:
+    Type: AWS::SNS::Topic
+  SNSEmailSubscriber:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+      TopicArn: !Ref SNSNotificationTopic
+  SNSNotificationTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref "SNSNotificationTopic"
+      PolicyDocument:
+        Version: "2008-10-17"
+        Id: __default_policy_ID
+        Statement:
+          - Sid: __default_statement_ID
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:GetTopicAttributes
+              - SNS:SetTopicAttributes
+              - SNS:AddPermission
+              - SNS:RemovePermission
+              - SNS:DeleteTopic
+              - SNS:Subscribe
+              - SNS:ListSubscriptionsByTopic
+              - SNS:Publish
+              - SNS:Receive
+            Resource:
+              - !Ref "SNSNotificationTopic"
+            Condition:
+              StringEquals:
+                AWS:SourceOwner:
+                  - !Ref "AWS::AccountId"
+          - Sid: TrustCWEToPublishEventsToMyTopic
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sns:Publish
+            Resource:
+              - !Ref "SNSNotificationTopic"
+  AddFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
+    Properties:
+      Handler: add.lambda_handler
+      Runtime: python3.8
+      CodeUri: lambdas/add
+      FunctionName: !Ref AddFunctionName
+      AutoPublishAlias: live
+      MemorySize: 128
+      Timeout: 30
+
+  CleanInputFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: cleaninput.lambda_handler
+      Runtime: python3.8
+      CodeUri: lambdas/cleaninput
+      FunctionName: !Ref CleanInputFunctionName
+      AutoPublishAlias: live
+      MemorySize: 128
+      Timeout: 30
+
+  DivideFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: divide.lambda_handler
+      Runtime: python3.8
+      CodeUri: lambdas/divide
+      FunctionName: !Ref DivideFunctionName
+      AutoPublishAlias: live
+      MemorySize: 128
+      Timeout: 30
+
+  MultiplyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: multiply.lambda_handler
+      Runtime: python3.8
+      CodeUri: lambdas/multiply
+      FunctionName: !Ref MultiplyFunctionName
+      AutoPublishAlias: live
+      MemorySize: 128
+      Timeout: 30
+
+  SubtractFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: subtract.lambda_handler
+      Runtime: python3.8
+      CodeUri: lambdas/subtract
+      FunctionName: !Ref SubtractFunctionName
+      AutoPublishAlias: live
+      MemorySize: 128
+      Timeout: 30
